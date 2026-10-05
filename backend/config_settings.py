@@ -24,7 +24,6 @@ INSTALLED_APPS = [
     "orders",
     "payments",
     "analytics",
-    "notifications",
 ]
 
 MIDDLEWARE = [

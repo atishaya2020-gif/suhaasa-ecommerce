@@ -1,0 +1,147 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Dashboard · SVAASA Admin{% endblock %}
+
+{% block content %}
+<div class="suhaasa-dashboard-v4">
+<style>
+  .suhaasa-dashboard-v4 .panel,.suhaasa-dashboard-v4 .metric,.suhaasa-dashboard-v4 .footer-card{background:#fffdf9!important;color:var(--s-ink)!important;box-shadow:0 4px 18px rgba(61,51,45,.025)}
+  .suhaasa-dashboard-v4 .order-table,.suhaasa-dashboard-v4 .mini-table{background:#fffdf9!important;color:var(--s-ink)!important}
+  .suhaasa-dashboard-v4 .order-table thead,.suhaasa-dashboard-v4 .mini-table thead{background:#f7efe8!important}
+  .suhaasa-dashboard-v4 .order-table th,.suhaasa-dashboard-v4 .order-table td,.suhaasa-dashboard-v4 .mini-table th,.suhaasa-dashboard-v4 .mini-table td{background:transparent!important;color:var(--s-ink)!important}
+  .suhaasa-dashboard-v4 .order-table tbody tr:hover{background:#fbf3ec!important}
+  .suhaasa-dashboard-v4 .metric:hover,.suhaasa-dashboard-v4 .panel:hover{box-shadow:0 7px 24px rgba(86,57,41,.055);transform:translateY(-1px)}
+  .suhaasa-dashboard-v4 .metric,.suhaasa-dashboard-v4 .panel{transition:box-shadow .18s ease,transform .18s ease}
+  .suhaasa-dashboard-v4 .traffic-shell{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(230px,.65fr);gap:12px}
+  .suhaasa-dashboard-v4 .audience-card{display:grid;gap:16px}
+  .suhaasa-dashboard-v4 .audience-block{padding-bottom:14px;border-bottom:1px solid var(--s-line)}
+  .suhaasa-dashboard-v4 .audience-block:last-child{border-bottom:0;padding-bottom:0}
+  .suhaasa-dashboard-v4 .audience-label{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--s-muted);margin-bottom:8px}
+  .suhaasa-dashboard-v4 .device-row,.suhaasa-dashboard-v4 .source-row{display:flex;justify-content:space-between;gap:10px;font-size:10px;padding:5px 0}
+  .suhaasa-dashboard-v4 .device-row strong,.suhaasa-dashboard-v4 .source-row strong{font-weight:600}
+  .suhaasa-dashboard-v4 .device-bar{height:5px;border-radius:999px;background:#eadfd5;overflow:hidden;margin-top:4px}
+  .suhaasa-dashboard-v4 .device-bar i{display:block;height:100%;background:var(--s-terra);border-radius:999px}
+  @media(max-width:1200px){.suhaasa-dashboard-v4 .traffic-shell{grid-template-columns:1fr}}
+
+  .suhaasa-dashboard-v4{max-width:1380px;position:relative}
+  .dash-leaf{position:absolute;right:-8px;top:-26px;width:150px;height:180px;opacity:.20;pointer-events:none}
+  .dash-leaf path{fill:none;stroke:var(--s-terra);stroke-width:1.5}
+  .hero{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin:4px 0 25px;position:relative}
+  .eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--s-terra);margin-bottom:8px}
+  .hero h1{font-family:Georgia,"Times New Roman",serif;font-size:42px;line-height:1.05;font-weight:400;letter-spacing:-.025em;margin:0 0 8px;color:var(--s-ink)}
+  .hero p{font-size:14px;color:var(--s-muted);margin:0;max-width:660px}
+  .hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;z-index:1}
+  .action{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid var(--s-line);border-radius:9px;background:var(--s-card);color:var(--s-ink)!important;text-decoration:none;font-size:11px}
+  .action:hover{background:var(--s-soft2);text-decoration:none}
+  .action.primary{background:var(--s-brown);border-color:var(--s-brown);color:#fff!important}
+  .action.primary:hover{background:var(--s-brown2)}
+  .period{display:flex;gap:4px;border:1px solid var(--s-line);padding:3px;border-radius:10px;background:var(--s-card);width:max-content}
+  .period button{border:0;background:transparent;color:var(--s-ink);padding:7px 11px;border-radius:7px;font-size:10px;cursor:pointer}
+  .period button.active{background:var(--s-brown);color:#fff}
+
+  .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+  .metric{background:var(--s-card);border:1px solid var(--s-line);border-radius:12px;padding:18px;min-height:120px;position:relative;overflow:hidden}
+  .metric-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--s-blush);color:var(--s-brown);font-size:17px;margin-bottom:11px}
+  .metric:nth-child(2) .metric-icon{background:#f1e1d3}.metric:nth-child(3) .metric-icon{background:#eee5dc}.metric:nth-child(4) .metric-icon{background:#f2e9df}
+  .metric-label{font-family:Georgia,"Times New Roman",serif;font-size:14px;color:var(--s-ink)}
+  .metric-value{font-family:Georgia,"Times New Roman",serif;font-size:28px;line-height:1;margin-top:5px;color:var(--s-ink)}
+  .metric-note{font-size:10px;color:var(--s-muted);margin-top:8px}
+  .metric-spark{position:absolute;right:16px;bottom:20px;width:72px;height:34px;opacity:.75}
+  .metric-spark path{fill:none;stroke:var(--s-terra);stroke-width:1.7}
+
+  .section{margin-top:16px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.section-head h2{font-family:Georgia,"Times New Roman",serif;font-size:22px;font-weight:400;margin:0}.section-head span{font-size:11px;color:var(--s-muted)}
+  .analytics-grid{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(260px,.9fr) minmax(220px,.75fr);gap:12px}
+  .panel{background:var(--s-card);border:1px solid var(--s-line);border-radius:12px;padding:18px;min-width:0}
+  .panel h3{font-family:Georgia,"Times New Roman",serif;font-size:18px;font-weight:400;margin:0 0 4px}.panel-sub{font-size:10px;color:var(--s-muted);margin-bottom:13px}
+  .chart-legend{display:flex;gap:14px;font-size:10px;color:var(--s-muted);margin-bottom:7px}.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}.dot.visitors{background:var(--s-brown)}.dot.views{background:#e6c8b7}
+  .chart-area{height:190px;position:relative;border-bottom:1px solid var(--s-line);background:repeating-linear-gradient(to bottom,transparent 0,transparent 37px,rgba(118,107,99,.09) 38px)}
+  .bars{height:100%;display:grid;grid-template-columns:repeat(30,1fr);align-items:end;gap:4px;padding:7px 4px 0}.bar{min-height:2px;background:var(--s-terra);border-radius:5px 5px 0 0;opacity:.75}.bar:hover{opacity:1}.bar::after{content:attr(data-label);position:absolute;display:none}.bar:hover::after{display:block}
+  .axis{display:flex;justify-content:space-between;font-size:9px;color:var(--s-muted);padding-top:6px}
+  .donut-wrap{display:flex;align-items:center;gap:16px;min-height:190px}.donut{width:125px;height:125px;border-radius:50%;position:relative;background:conic-gradient(var(--s-terra) 0 20%,var(--s-blush) 20% 100%);flex:0 0 auto}.donut::after{content:"";position:absolute;inset:29px;background:var(--s-card);border-radius:50%}.donut-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:1;font-family:Georgia,"Times New Roman",serif;font-size:20px}.donut-center small{font-family:Inter,sans-serif;font-size:9px;color:var(--s-muted)}
+  .status-list{display:grid;gap:8px;flex:1}.status-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px}.status-label{display:flex;align-items:center;gap:6px}.status-mark{width:7px;height:7px;border-radius:50%;background:var(--s-blush)}.status-mark.placed{background:var(--s-terra)}.status-mark.processing{background:var(--s-gold)}.status-mark.shipped{background:var(--s-sage)}.status-mark.delivered{background:#8f9d6b}.status-mark.cancelled{background:#c54b48}
+  .top-pages{min-height:190px}.mini-table{width:100%;border-collapse:collapse}.mini-table th,.mini-table td{padding:9px 4px;border-bottom:1px solid var(--s-line);font-size:10px;text-align:left}.mini-table th:last-child,.mini-table td:last-child{text-align:right}.mini-table th{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--s-muted);font-weight:500}
+  .empty{font-size:11px;color:var(--s-muted);padding:18px 0}
+
+  .orders-grid{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(220px,.8fr);gap:12px}.order-table{width:100%;border-collapse:collapse}.order-table th,.order-table td{padding:9px 7px;border-bottom:1px solid var(--s-line);font-size:10px;text-align:left;white-space:nowrap}.order-table th{font-size:8px;letter-spacing:.09em;text-transform:uppercase;color:var(--s-muted);font-weight:500}.order-table th:last-child,.order-table td:last-child{text-align:right}.order-table tr:last-child td{border-bottom:0}.order-table a{color:var(--s-brown);text-decoration:underline;text-underline-offset:2px}
+  .pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;background:var(--s-blush);color:var(--s-brown);font-size:9px;text-transform:capitalize}.pill.paid,.pill.delivered{background:#e0eadb;color:var(--s-sage)}.pill.pending,.pill.processing{background:#f1e2c9;color:#9a7040}.pill.cancelled,.pill.failed{background:#f0d7d3;color:var(--s-red)}
+  .stock-list{display:grid;gap:9px}.stock-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--s-line);font-size:10px}.stock-row:last-child{border-bottom:0}.stock-row small{display:block;color:var(--s-muted);margin-top:3px}.stock-badge{align-self:center;border-radius:999px;padding:4px 8px;background:#f5ddd5;color:var(--s-red);white-space:nowrap}
+  .quick{display:flex;gap:7px;flex-wrap:wrap}.quick a{display:inline-flex;padding:8px 10px;border-radius:8px;border:1px solid var(--s-line);background:var(--s-soft2);font-size:10px;color:var(--s-ink);text-decoration:none}.quick a.primary{background:var(--s-brown);border-color:var(--s-brown);color:#fff}.quick a:hover{text-decoration:none;background:var(--s-blush)}
+  .store-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px}.footer-card{background:var(--s-card);border:1px solid var(--s-line);border-radius:12px;padding:15px}.footer-card h3{font-family:Georgia,"Times New Roman",serif;font-size:17px;font-weight:400;margin:0 0 10px}
+
+  @media(max-width:1200px){.analytics-grid{grid-template-columns:1.4fr 1fr}.analytics-grid .top-pages{grid-column:1/-1}.metric-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:850px){.hero{align-items:flex-start;flex-direction:column}.analytics-grid,.orders-grid,.store-footer{grid-template-columns:1fr}.metric-grid{grid-template-columns:1fr}.hero h1{font-size:34px}.dash-leaf{display:none}}
+</style>
+
+<svg class="dash-leaf" viewBox="0 0 150 180" aria-hidden="true"><path d="M125 4C82 23 51 54 37 94c-9 25-5 51 9 74M117 21c-31 5-57 21-77 45M91 55c-21 3-38 13-53 27M66 92c-14 3-25 9-34 17M101 42c7 17 7 31 2 44M76 72c6 15 5 27 1 39"/></svg>
+
+<div class="hero">
+  <div><div class="eyebrow">SVAASA / Store administration</div><h1>Good afternoon, {{ user.first_name|default:user.username }}.</h1><p>Here’s what’s happening with SVAASA today.</p></div>
+  <div class="hero-actions"><div class="period" aria-label="Analytics period"><button data-period="7">7 days</button><button data-period="30" class="active">30 days</button><button data-period="90">90 days</button></div><a class="action primary" href="{% url 'admin:products_product_add' %}">+ Add product</a></div>
+</div>
+
+<section class="metric-grid">
+  <div class="metric"><div class="metric-icon">₹</div><div class="metric-label">Paid revenue</div><div class="metric-value" id="metric-revenue">₹0</div><div class="metric-note">Selected period</div><svg class="metric-spark" viewBox="0 0 80 38"><path d="M2 31C14 27 16 35 25 25s13 8 22-3 11 4 19-7 8-5 12-10"/></svg></div>
+  <div class="metric"><div class="metric-icon">□</div><div class="metric-label">Orders</div><div class="metric-value" id="metric-orders">0</div><div class="metric-note" id="metric-orders-note">0 paid</div><svg class="metric-spark" viewBox="0 0 80 38"><path d="M2 31C14 27 18 31 28 22s12 8 21-2 11 4 17-5 8-2 12-9"/></svg></div>
+  <div class="metric"><div class="metric-icon">♙</div><div class="metric-label">Visitors</div><div class="metric-value" id="metric-visitors">0</div><div class="metric-note">Unique visitors</div><svg class="metric-spark" viewBox="0 0 80 38"><path d="M2 31L78 31"/></svg></div>
+  <div class="metric"><div class="metric-icon">◉</div><div class="metric-label">Page views</div><div class="metric-value" id="metric-pageviews">0</div><div class="metric-note">Store traffic</div><svg class="metric-spark" viewBox="0 0 80 38"><path d="M2 31L78 31"/></svg></div>
+</section>
+
+<section class="section">
+  <div class="section-head"><h2>Visitors & page views</h2><span>Last <b id="period-label">30</b> days</span></div>
+  <div class="traffic-shell">
+    <section class="panel"><div class="chart-legend"><span><i class="dot visitors"></i>Visitors</span><span><i class="dot views"></i>Page views</span></div><div class="chart-area"><div id="traffic-chart" class="bars"></div></div><div class="axis"><span id="chart-start">—</span><span id="chart-end">—</span></div><div id="traffic-empty" class="empty" style="display:none">Page views will appear once customers visit your store.</div></section>
+    <section class="panel audience-card">
+      <div><h3>Audience snapshot</h3><div class="panel-sub">Device mix and acquisition.</div></div>
+      <div class="audience-block"><div class="audience-label">Devices</div><div id="device-list"><div class="empty">No device data yet.</div></div></div>
+      <div class="audience-block"><div class="audience-label">Top source</div><div id="source-list"><div class="empty">Direct</div></div></div>
+    </section>
+  </div>
+
+  <div class="analytics-grid" style="margin-top:12px;grid-template-columns:minmax(0,1fr) minmax(300px,.75fr);">
+    <section class="panel"><h3>Order status</h3><div class="donut-wrap"><div id="donut" class="donut"><div class="donut-center"><span id="donut-total">0</span><small>Orders</small></div></div><div id="status-list" class="status-list"></div></div></section>
+    <section class="panel top-pages"><h3>Top pages</h3><div class="panel-sub">Most visited storefront pages.</div><table class="mini-table"><thead><tr><th>Page</th><th>Views</th></tr></thead><tbody id="top-pages"></tbody></table></section>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head"><h2>Recent orders</h2><a href="{% url 'admin:orders_order_changelist' %}">View all orders →</a></div>
+  <div class="orders-grid">
+    <section class="panel"><table class="order-table"><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Payment</th><th>Total</th><th>Date</th></tr></thead><tbody id="orders-table"></tbody></table></section>
+    <section class="panel"><h3>Inventory attention</h3><div class="panel-sub">Variants that need action.</div><div id="stock-list" class="stock-list"></div><div class="quick" style="margin-top:12px"><a href="{% url 'admin:products_productvariant_changelist' %}">View inventory →</a></div></section>
+  </div>
+</section>
+
+<section class="store-footer">
+  <div class="footer-card"><h3>Quick actions</h3><div class="quick"><a class="primary" href="{% url 'admin:products_product_add' %}">+ Add product</a><a href="{% url 'admin:orders_order_changelist' %}">View orders</a><a href="{% url 'admin:products_productvariant_changelist' %}">Manage inventory</a></div></div>
+  <div class="footer-card"><h3>Catalog</h3><div class="quick"><a href="{% url 'admin:products_product_changelist' %}">Products</a><a href="{% url 'admin:products_category_changelist' %}">Categories</a><a href="{% url 'admin:products_productvariant_changelist' %}">Variants</a></div></div>
+  <div class="footer-card"><h3>Customers & commerce</h3><div class="quick"><a href="{% url 'admin:auth_user_changelist' %}">Customers</a><a href="{% url 'admin:payments_payment_changelist' %}">Payments</a><a href="{% url 'admin:analytics_pageview_changelist' %}">Analytics</a></div></div>
+</section>
+</div>
+
+<script>
+(function(){
+ const fmt=new Intl.NumberFormat('en-IN');
+ const money=v=>'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+ const text=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+ function render(data){
+  const t=data.traffic||{},c=data.commerce||{},inv=data.inventory||{};
+  text('metric-revenue',money(c.revenue));text('metric-orders',fmt.format(c.orders||0));text('metric-orders-note',(c.paid_orders||0)+' paid');text('metric-visitors',fmt.format(t.visitors||0));text('metric-pageviews',fmt.format(t.pageviews||0));text('period-label',data.period_days||30);
+  const daily=t.daily||[],values=daily.slice(-30),chart=document.getElementById('traffic-chart');chart.innerHTML='';const max=Math.max(1,...values.map(x=>Number(x.visitors||0)));
+  values.forEach(x=>{const b=document.createElement('div');b.className='bar';b.style.height=Math.max(2,Math.round(Number(x.visitors||0)/max*175))+'px';b.dataset.label=x.day+': '+(x.visitors||0);chart.appendChild(b)});
+  text('chart-start',values[0]?values[0].day:'—');text('chart-end',values.length?values[values.length-1].day:'—');document.getElementById('traffic-empty').style.display=values.some(x=>Number(x.visitors||0)>0)?'none':'block';
+  const status=document.getElementById('status-list');status.innerHTML='';const rows=c.status_breakdown||[];const total=rows.reduce((n,r)=>n+Number(r.count||0),0);text('donut-total',fmt.format(total));
+  const colors=['placed','processing','shipped','delivered','cancelled'];rows.forEach(r=>{const el=document.createElement('div');el.className='status-row';const s=String(r.status||'').replaceAll('_',' ');el.innerHTML='<span class="status-label"><i class="status-mark '+esc(r.status)+'"></i>'+esc(s)+'</span><strong>'+fmt.format(r.count||0)+'</strong>';status.appendChild(el)});if(!status.children.length)status.innerHTML='<div class="empty">No orders yet.</div>';
+  if(total){let start=0;const parts=rows.map((r,i)=>{const pct=Number(r.count||0)/total*100;const color=r.status==='placed'?'var(--s-terra)':r.status==='processing'?'var(--s-gold)':r.status==='shipped'?'var(--s-sage)':r.status==='delivered'?'#8f9d6b':r.status==='cancelled'?'#c54b48':'var(--s-blush)';const seg=color+' '+start+'% '+(start+pct)+'%';start+=pct;return seg});document.getElementById('donut').style.background='conic-gradient('+parts.join(',')+')'}
+  const pages=document.getElementById('top-pages');pages.innerHTML='';(t.top_pages||[]).slice(0,5).forEach(r=>{const tr=document.createElement('tr');tr.innerHTML='<td>'+esc(r.path)+'</td><td>'+fmt.format(r.pageviews||0)+'</td>';pages.appendChild(tr)});if(!pages.children.length)pages.innerHTML='<tr><td colspan="2" class="empty">No page data yet.</td></tr>';
+  const devices=document.getElementById('device-list');devices.innerHTML='';const deviceRows=t.devices||[];const deviceTotal=deviceRows.reduce((n,r)=>n+Number(r.visits||0),0);deviceRows.slice(0,3).forEach(r=>{const row=document.createElement('div');row.className='device-row';const pct=deviceTotal?Math.round(Number(r.visits||0)/deviceTotal*100):0;row.innerHTML='<div style="flex:1"><span>'+esc(r.device_type||'unknown')+'</span><div class="device-bar"><i style="width:'+pct+'%"></i></div></div><strong>'+fmt.format(r.visits||0)+'</strong>';devices.appendChild(row)});if(!devices.children.length)devices.innerHTML='<div class="empty">No device data yet.</div>';
+  const sources=document.getElementById('source-list');sources.innerHTML='';const sourceRows=t.sources||[];sourceRows.slice(0,3).forEach(r=>{const row=document.createElement('div');row.className='source-row';row.innerHTML='<span>'+esc(r.utm_source||'Direct')+'</span><strong>'+fmt.format(r.visits||0)+'</strong>';sources.appendChild(row)});if(!sources.children.length)sources.innerHTML='<div class="empty">Direct</div>';
+  const orders=document.getElementById('orders-table');orders.innerHTML='';(c.recent_orders||[]).slice(0,6).forEach(o=>{const tr=document.createElement('tr');const date=o.created_at?new Date(o.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—';tr.innerHTML='<td><a href="'+esc(o.admin_url||'#')+'">'+esc(o.order_number)+'</a></td><td>'+esc(o.full_name)+'</td><td><span class="pill '+esc(o.status)+'">'+esc(String(o.status).replaceAll('_',' '))+'</span></td><td><span class="pill '+esc(o.payment_status)+'">'+esc(o.payment_status)+'</span></td><td>'+money(o.total)+'</td><td>'+esc(date)+'</td>';orders.appendChild(tr)});if(!orders.children.length)orders.innerHTML='<tr><td colspan="6" class="empty">No orders in this period.</td></tr>';
+  const stock=document.getElementById('stock-list');stock.innerHTML='';(inv.low_stock||[]).slice(0,4).forEach(x=>{const e=document.createElement('div');e.className='stock-row';e.innerHTML='<div><strong>'+esc(x.product)+'</strong><small>'+esc(x.sku)+' · '+esc(x.variant)+'</small></div><span class="stock-badge">Only '+fmt.format(x.stock_quantity)+' left</span>';stock.appendChild(e)});if(!stock.children.length){stock.innerHTML='<div class="empty">No low-stock variants. You’re all set 🎉</div>'}
+ }
+ async function load(period){try{const r=await fetch('/api/analytics/dashboard/?period='+period,{credentials:'same-origin',headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Unable to load dashboard');render(await r.json())}catch(e){console.error(e)}}
+ document.querySelectorAll('[data-period]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-period]').forEach(x=>x.classList.remove('active'));b.classList.add('active');load(b.dataset.period)}));load('30');
+})();
+</script>
+{% endblock %}

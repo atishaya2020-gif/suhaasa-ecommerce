@@ -1,14 +1,17 @@
 from decimal import Decimal
-
+from products.models import ProductVariant
 from django.db import transaction
+from django.db.models import F
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from commerce.views import get_guest_session, session_payload
+from products.models import InventoryAdjustment
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
+from .services import release_reserved_inventory
 
 
 FREE_SHIPPING_THRESHOLD = Decimal("1499.00")
@@ -44,14 +47,17 @@ class CreateOrderAPIView(APIView):
             locked_items = []
             subtotal = Decimal("0.00")
             for cart_item in cart_items:
-                variant = session.cart_items.select_related("variant__product").select_for_update().get(pk=cart_item.pk).variant
+                # Lock the cart row and variant row in the same transaction. The
+                # variant lock is the authoritative concurrency boundary for stock.
+                locked_cart_item = session.cart_items.select_related("variant__product").select_for_update().get(pk=cart_item.pk)
+                variant = ProductVariant.objects.select_related("product").select_for_update().get(pk=locked_cart_item.variant_id)
                 if not variant.is_active or not variant.product.is_active:
                     return Response({"detail": f"{variant.product.name} is no longer available."}, status=status.HTTP_409_CONFLICT)
-                if cart_item.quantity > variant.stock_quantity:
+                if locked_cart_item.quantity > variant.stock_quantity:
                     return Response({"detail": f"Only {variant.stock_quantity} units are available for {variant.name}."}, status=status.HTTP_409_CONFLICT)
-                line_total = variant.product.price * cart_item.quantity
+                line_total = variant.product.price * locked_cart_item.quantity
                 subtotal += line_total
-                locked_items.append((cart_item, variant, line_total))
+                locked_items.append((locked_cart_item, variant, line_total))
 
             shipping_amount = EXPRESS_SHIPPING if shipping_method == "express" else (Decimal("0.00") if subtotal >= FREE_SHIPPING_THRESHOLD else STANDARD_SHIPPING)
             order = Order.objects.create(
@@ -71,6 +77,7 @@ class CreateOrderAPIView(APIView):
                 total=subtotal + shipping_amount,
                 status="pending_payment",
                 payment_status="pending",
+                stock_reserved=True,
             )
 
             for cart_item, variant, line_total in locked_items:
@@ -90,13 +97,46 @@ class CreateOrderAPIView(APIView):
                     quantity=cart_item.quantity,
                     line_total=line_total,
                 )
-                variant.stock_quantity -= cart_item.quantity
+                before = variant.stock_quantity
+                variant.stock_quantity = before - cart_item.quantity
                 variant.save(update_fields=["stock_quantity"])
+                InventoryAdjustment.objects.create(
+                    variant=variant,
+                    quantity_before=before,
+                    quantity_change=-cart_item.quantity,
+                    quantity_after=variant.stock_quantity,
+                    reason="order_adjustment",
+                    note=f"Reserved stock for pending-payment order {order.order_number}",
+                )
 
-            # Keep the cart until payment is verified successfully.
-            # This allows a customer to retry a failed/cancelled payment.
+            # Keep the cart until payment is verified successfully. Stock is
+            # reserved separately so a failed/cancelled payment can release it.
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+
+class CancelPendingOrderAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, order_number):
+        with transaction.atomic():
+            order = Order.objects.select_for_update().filter(
+                user=request.user,
+                order_number=order_number,
+            ).first()
+            if not order:
+                return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+            if order.status == "cancelled":
+                return Response(OrderSerializer(order).data)
+            if order.status != "pending_payment" or order.payment_status != "pending":
+                return Response({"detail": "Only pending-payment orders can be cancelled."}, status=status.HTTP_409_CONFLICT)
+
+            release_reserved_inventory(order)
+            order.status = "cancelled"
+            order.payment_status = "failed"
+            order.save(update_fields=["status", "payment_status", "updated_at"])
+
+        return Response(OrderSerializer(order).data)
 
 
 class OrderListAPIView(APIView):

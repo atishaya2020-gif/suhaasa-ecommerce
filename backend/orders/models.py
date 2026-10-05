@@ -40,6 +40,9 @@ class Order(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="placed")
     payment_status = models.CharField(max_length=30, choices=PAYMENT_STATUS_CHOICES, default="pending")
+    # True only while stock has been reserved for a pending payment.
+    # Successful payment consumes the reservation; failed/cancelled payment releases it.
+    stock_reserved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -57,6 +57,7 @@ class ProductVariant(models.Model):
     name = models.CharField(max_length=80)
     sku = models.CharField(max_length=70, unique=True)
     stock_quantity = models.PositiveIntegerField(default=0)
+    low_stock_threshold = models.PositiveIntegerField(default=5)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -65,8 +66,68 @@ class ProductVariant(models.Model):
             models.UniqueConstraint(fields=["product", "name"], name="unique_product_variant_name"),
         ]
 
+    @property
+    def is_out_of_stock(self):
+        return self.stock_quantity == 0
+
+    @property
+    def is_low_stock(self):
+        return 0 < self.stock_quantity <= self.low_stock_threshold
+
+    @property
+    def stock_status(self):
+        if self.stock_quantity == 0:
+            return "out_of_stock"
+        if self.stock_quantity <= self.low_stock_threshold:
+            return "low_stock"
+        return "in_stock"
+
     def __str__(self):
         return f"{self.product.name} — {self.name}"
+
+
+class InventoryAdjustment(models.Model):
+    REASON_CHOICES = [
+        ("restock", "Restock"),
+        ("correction", "Manual correction"),
+        ("damaged", "Damaged"),
+        ("returned", "Returned"),
+        ("order_adjustment", "Order adjustment"),
+        ("other", "Other"),
+    ]
+
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="inventory_adjustments",
+    )
+    quantity_before = models.PositiveIntegerField()
+    quantity_change = models.IntegerField()
+    quantity_after = models.PositiveIntegerField()
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES)
+    note = models.CharField(max_length=255, blank=True)
+    adjusted_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_adjustments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["variant", "-created_at"]),
+            models.Index(fields=["reason", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.variant} — "
+            f"{self.quantity_change:+d} "
+            f"({self.quantity_before} → {self.quantity_after})"
+        )
 
 
 class ProductImage(models.Model):
