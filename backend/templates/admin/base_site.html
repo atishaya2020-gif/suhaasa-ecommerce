@@ -6,8 +6,8 @@
 {{ block.super }}
 <style>
 :root{
- --s-ink:#332720;--s-muted:#7c6c60;--s-cream:#faf7f2;--s-card:#fffdf9;--s-soft:#f3e9df;--s-soft2:#efe1d5;
- --s-line:#e7dbcf;--s-brown:#754a36;--s-brown2:#5f3929;--s-terra:#bd7656;--s-blush:#f2e3d8;--s-sage:#6f8065;--s-gold:#c59b69;--s-red:#b45b4c;
+ --s-ink:#291e18;--s-muted:#5e4d42;--s-cream:#faf7f2;--s-card:#fffdf9;--s-soft:#f3e9df;--s-soft2:#efe1d5;
+ --s-line:#dfd2c4;--s-brown:#754a36;--s-brown2:#5f3929;--s-terra:#bd7656;--s-blush:#f2e3d8;--s-sage:#6f8065;--s-gold:#c59b69;--s-red:#b45b4c;
 }
 html,body{background:var(--s-cream)!important;color:var(--s-ink)}
 body{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.005em}
@@ -68,7 +68,7 @@ html[data-theme="dark"] .owner-notification-item.unread{background:rgba(71,55,45
 #nav-sidebar{background:#f5eee7!important;border-right:1px solid var(--s-line)!important;width:258px!important;padding:25px 16px!important;box-sizing:border-box}
 #nav-sidebar .toggle-nav-sidebar{display:none!important}
 .suhaasa-nav{padding:0 1px}.suhaasa-nav-brand{display:none}
-.suhaasa-nav-section{margin:18px 9px 7px;font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#9a897c}
+.suhaasa-nav-section{margin:18px 9px 7px;font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#6f5d50}
 .suhaasa-nav-section:first-of-type{margin-top:4px}
 .suhaasa-nav a{display:flex;align-items:center;gap:12px;color:var(--s-ink)!important;text-decoration:none;border-radius:10px;margin:2px 0;padding:10px 11px;font-size:12px;transition:background .16s ease,color .16s ease}
 .suhaasa-nav a:hover{background:var(--s-soft2);color:var(--s-brown2)!important}
@@ -84,6 +84,43 @@ html[data-theme="dark"] .owner-notification-item.unread{background:rgba(71,55,45
 /* Standard admin pages should still feel branded */
 .module,.inline-group,.submit-row{background:var(--s-card);border:1px solid var(--s-line);border-radius:12px;box-shadow:0 4px 18px rgba(61,51,45,.03);overflow:hidden}
 .module h2,.module caption,.inline-group h2{background:var(--s-soft);color:var(--s-ink);font-family:Georgia,"Times New Roman",serif;font-weight:400}
+
+/* Fix Tables for all admin pages in light mode */
+html:not([data-theme="dark"]) table,
+html:not([data-theme="dark"]) .module table,
+html:not([data-theme="dark"]) .inline-group table,
+html:not([data-theme="dark"]) .panel table,
+html:not([data-theme="dark"]) .order-table,
+html:not([data-theme="dark"]) .mini-table {
+  background: var(--s-card) !important;
+}
+html:not([data-theme="dark"]) tr:not(:hover),
+html:not([data-theme="dark"]) .module table tr:not(:hover),
+html:not([data-theme="dark"]) .inline-group table tr:not(:hover),
+html:not([data-theme="dark"]) .panel table tr:not(:hover) {
+  background: transparent !important;
+}
+html:not([data-theme="dark"]) td,
+html:not([data-theme="dark"]) th,
+html:not([data-theme="dark"]) .module table td,
+html:not([data-theme="dark"]) .module table th,
+html:not([data-theme="dark"]) .inline-group table td,
+html:not([data-theme="dark"]) .inline-group table th,
+html:not([data-theme="dark"]) .panel table td,
+html:not([data-theme="dark"]) .panel table th {
+  background: transparent !important;
+  color: var(--s-ink) !important;
+}
+html:not([data-theme="dark"]) thead th,
+html:not([data-theme="dark"]) .module thead th,
+html:not([data-theme="dark"]) .inline-group thead th,
+html:not([data-theme="dark"]) .panel thead th {
+  background: var(--s-soft) !important;
+}
+html:not([data-theme="dark"]) .form-row {
+  border-bottom: 1px solid var(--s-line) !important;
+}
+
 input,textarea,select,.vTextField,.vLargeTextField{border:1px solid #d8c9bb;border-radius:9px;background:#fffdfa;color:var(--s-ink)}
 input:focus,textarea:focus,select:focus{border-color:var(--s-brown);box-shadow:0 0 0 2px rgba(117,74,54,.1);outline:none}
 .button,input[type=submit],input[type=button],.submit-row input,a.button,.object-tools a{background:var(--s-brown)!important;border:1px solid var(--s-brown)!important;border-radius:9px!important;color:#fff!important}
@@ -98,6 +135,14 @@ html[data-theme="dark"] #header{background:#302720!important}html[data-theme="da
 
 /* SVAASA contrast hardening: keep the dashboard readable in Django auto/dark mode. */
 @media (prefers-color-scheme: dark) {
+  html:not([data-theme="dark"]) {
+    --body-bg: var(--s-card);
+    --body-fg: var(--s-ink);
+    --body-quiet-color: var(--s-muted);
+    --body-loud-color: var(--s-ink);
+    --darkened-bg: var(--s-cream);
+    --border-color: var(--s-line);
+  }
   html:not([data-theme="dark"]) body,
   html:not([data-theme="dark"]) #main { background:var(--s-cream)!important; color:var(--s-ink)!important; }
   html:not([data-theme="dark"]) #header { background:rgba(255,253,249,.97)!important; color:var(--s-ink)!important; border-bottom-color:var(--s-line)!important; }

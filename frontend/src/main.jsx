@@ -119,6 +119,49 @@ const GUEST_TOKEN_KEY = 'suhaasa_guest_token';
 const ACCESS_TOKEN_KEY = 'suhaasa_access_token';
 const REFRESH_TOKEN_KEY = 'suhaasa_refresh_token';
 
+const ANALYTICS_VISITOR_KEY = 'suhaasa_analytics_visitor';
+const ANALYTICS_SESSION_KEY = 'suhaasa_analytics_session';
+
+function getAnalyticsId(key, storage) {
+  let value = storage.getItem(key);
+  if (!value) {
+    value = crypto.randomUUID();
+    storage.setItem(key, value);
+  }
+  return value;
+}
+
+function getDeviceType() {
+  const width = window.innerWidth;
+  if (width <= 767) return 'mobile';
+  if (width <= 1024) return 'tablet';
+  return 'desktop';
+}
+
+function trackPageView(path) {
+  try {
+    const url = new URL(window.location.href);
+    const payload = {
+      visitor_id: getAnalyticsId(ANALYTICS_VISITOR_KEY, window.localStorage),
+      session_id: getAnalyticsId(ANALYTICS_SESSION_KEY, window.sessionStorage),
+      path: path || window.location.pathname || '/',
+      referrer: document.referrer || '',
+      device_type: getDeviceType(),
+      utm_source: url.searchParams.get('utm_source') || '',
+      utm_medium: url.searchParams.get('utm_medium') || '',
+      utm_campaign: url.searchParams.get('utm_campaign') || '',
+    };
+    fetch(`${API_BASE_URL}/analytics/track/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (_) {
+    // Analytics must never interfere with the storefront.
+  }
+}
+
 function getGuestToken() {
   let token = window.localStorage.getItem(GUEST_TOKEN_KEY);
   if (!token) {
@@ -279,6 +322,14 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dusk' : 'light';
   }, [dark]);
+
+  useEffect(() => {
+    let analyticsPath = '/';
+    if (view === 'shop') analyticsPath = `/shop/${shopCategory === 'All' ? 'all' : shopCategory.toLowerCase()}`;
+    else if (view === 'checkout') analyticsPath = '/checkout';
+    else if (view === 'product' && selectedProduct) analyticsPath = `/product/${selectedProduct.slug || selectedProduct.id}`;
+    trackPageView(analyticsPath);
+  }, [view, shopCategory, selectedProduct?.slug, selectedProduct?.id]);
 
   useEffect(() => {
     let cancelled = false;
