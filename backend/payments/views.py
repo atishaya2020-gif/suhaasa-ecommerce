@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from orders.models import Order
-from orders.services import release_reserved_inventory
+from orders.services import _transition_locked_order
 from .models import Payment
 
 
@@ -43,19 +43,19 @@ class CreateRazorpayOrderAPIView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        # Keep the order locked through creation of the local Payment record so a
-        # concurrent cancellation cannot release the reservation between the
-        # eligibility check and payment-order creation.
         with transaction.atomic():
             order = (
                 Order.objects.select_for_update()
                 .filter(order_number=order_number, user=request.user)
                 .first()
             )
+
             if not order:
                 return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
             if order.payment_status == "paid":
                 return Response({"detail": "Order is already paid."}, status=status.HTTP_409_CONFLICT)
+
             if order.status != "pending_payment" or not order.stock_reserved:
                 return Response(
                     {"detail": "Order is no longer available for payment."},
@@ -63,6 +63,7 @@ class CreateRazorpayOrderAPIView(APIView):
                 )
 
             amount_paise = int((Decimal(order.total) * 100).quantize(Decimal("1")))
+
             try:
                 remote = gateway.order.create({
                     "amount": amount_paise,
@@ -130,6 +131,7 @@ class VerifyRazorpayPaymentAPIView(APIView):
                 "razorpay_signature": signature,
             })
             remote_payment = gateway.payment.fetch(payment_id)
+
             if (
                 remote_payment.get("order_id") != payment.gateway_order_id
                 or remote_payment.get("status") != "captured"
@@ -145,15 +147,10 @@ class VerifyRazorpayPaymentAPIView(APIView):
             order = Order.objects.select_for_update().get(pk=order.pk)
             payment = Payment.objects.select_for_update().get(pk=payment.pk)
 
-            # A retry after successful verification is a safe no-op. Do not
-            # mutate inventory or recreate the order transition.
             if order.payment_status == "paid" and payment.status == "captured":
                 from orders.serializers import OrderSerializer
                 return Response(OrderSerializer(order).data)
 
-            # The reservation is the inventory authorization for this payment.
-            # Once it has been released, this payment cannot safely fulfil the
-            # order even if Razorpay reports a captured payment.
             if not order.stock_reserved:
                 return Response(
                     {
@@ -171,12 +168,16 @@ class VerifyRazorpayPaymentAPIView(APIView):
             }
             payment.save(update_fields=["gateway_payment_id", "status", "raw_response", "updated_at"])
 
+            _transition_locked_order(
+                order,
+                "placed",
+                changed_by=None,
+                note="Payment captured and order placed.",
+            )
+
             order.payment_status = "paid"
-            order.status = "placed"
-            # Stock was already decremented at reservation time. Consuming the
-            # reservation here must NOT decrement it again.
             order.stock_reserved = False
-            order.save(update_fields=["payment_status", "status", "stock_reserved", "updated_at"])
+            order.save(update_fields=["payment_status", "stock_reserved", "updated_at"])
 
             if order.session_id:
                 order.session.cart_items.all().delete()
@@ -192,6 +193,7 @@ class RazorpayWebhookAPIView(APIView):
     def post(self, request):
         secret = settings.RAZORPAY_WEBHOOK_SECRET
         signature = request.META.get("HTTP_X_RAZORPAY_SIGNATURE", "")
+
         if not secret or not signature:
             return Response(
                 {"detail": "Webhook signature configuration missing."},
@@ -199,6 +201,7 @@ class RazorpayWebhookAPIView(APIView):
             )
 
         expected = hmac.new(secret.encode(), request.body, hashlib.sha256).hexdigest()
+
         if not hmac.compare_digest(expected, signature):
             return Response({"detail": "Invalid webhook signature."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -208,14 +211,28 @@ class RazorpayWebhookAPIView(APIView):
             return Response({"detail": "Invalid webhook payload."}, status=status.HTTP_400_BAD_REQUEST)
 
         event = payload.get("event", "")
+
+        # Refund webhooks are handled independently from payment webhooks.
+        # Razorpay documents refund.created, refund.processed and refund.failed.
+        # The raw request body is still used for signature verification above.
+        if event.startswith("refund."):
+            from .refunds import apply_refund_webhook
+
+            refund_entity = payload.get("payload", {}).get("refund", {}).get("entity", {})
+            refund = apply_refund_webhook(event=event, refund_entity=refund_entity)
+            return Response({"status": "ok" if refund else "ignored"})
+
         entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
         gateway_payment_id = entity.get("id", "")
         gateway_order_id = entity.get("order_id", "")
+
         payment = (
-            Payment.objects.filter(gateway_order_id=gateway_order_id)
+            Payment.objects
+            .filter(gateway_order_id=gateway_order_id)
             .select_related("order")
             .first()
         )
+
         if not payment:
             return Response({"status": "ignored"})
 
@@ -229,53 +246,59 @@ class RazorpayWebhookAPIView(APIView):
                 payment.gateway_payment_id = gateway_payment_id
 
             if event in {"payment.captured", "order.paid"}:
-                # Already completed successfully: duplicate webhook is a no-op.
                 if order.payment_status == "paid" and payment.status == "captured":
                     payment.raw_response = payload
                     payment.save(update_fields=["gateway_payment_id", "raw_response", "updated_at"])
+
                 elif not order.stock_reserved:
-                    # Payment may genuinely be captured, but the reservation was
-                    # already released. Never silently fulfil an order without
-                    # inventory. Record the gateway state for reconciliation.
                     payment.status = "captured"
                     payment.raw_response = payload
                     payment.save(update_fields=["gateway_payment_id", "status", "raw_response", "updated_at"])
                     reconciliation_required = True
+
                 else:
                     payment.status = "captured"
                     payment.raw_response = payload
-                    order.payment_status = "paid"
-                    order.status = "placed"
-                    # Reservation already consumed the stock. This only changes
-                    # the reservation state; it does not touch stock_quantity.
-                    order.stock_reserved = False
-                    order.save(update_fields=["payment_status", "status", "stock_reserved", "updated_at"])
                     payment.save(update_fields=["gateway_payment_id", "status", "raw_response", "updated_at"])
+
+                    _transition_locked_order(
+                        order,
+                        "placed",
+                        changed_by=None,
+                        note="Payment captured via Razorpay webhook.",
+                    )
+
+                    order.payment_status = "paid"
+                    order.stock_reserved = False
+                    order.save(update_fields=["payment_status", "stock_reserved", "updated_at"])
+
                     if order.session_id:
                         order.session.cart_items.all().delete()
 
             elif event == "payment.failed":
-                # A late failure must never downgrade a successfully paid order.
                 if order.payment_status == "paid":
                     payment.raw_response = payload
                     payment.save(update_fields=["gateway_payment_id", "raw_response", "updated_at"])
+
                 elif order.status == "cancelled":
-                    # Cancellation is terminal. Do not resurrect it to
-                    # pending_payment on a later gateway failure event.
                     payment.status = "failed"
                     payment.raw_response = payload
                     payment.save(update_fields=["gateway_payment_id", "status", "raw_response", "updated_at"])
+
                 else:
                     payment.status = "failed"
-                    release_reserved_inventory(order)
-                    order.payment_status = "failed"
-                    order.status = "cancelled"
-                    order.save(update_fields=["payment_status", "status", "updated_at"])
+
+                    _transition_locked_order(
+                        order,
+                        "cancelled",
+                        changed_by=None,
+                        note="Payment failed; order cancelled and reserved stock released.",
+                    )
+
                     payment.raw_response = payload
                     payment.save(update_fields=["gateway_payment_id", "status", "raw_response", "updated_at"])
+
             else:
-                # Preserve the raw event for diagnostics without changing the
-                # payment/order state for events this endpoint does not handle.
                 payment.raw_response = payload
                 payment.save(update_fields=["gateway_payment_id", "raw_response", "updated_at"])
 
@@ -284,5 +307,5 @@ class RazorpayWebhookAPIView(APIView):
                 {"status": "reconciliation_required"},
                 status=status.HTTP_409_CONFLICT,
             )
-        return Response({"status": "ok"})
 
+        return Response({"status": "ok"})

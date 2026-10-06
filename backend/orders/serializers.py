@@ -1,8 +1,8 @@
 from rest_framework import serializers
 
-from payments.models import Payment
+from payments.models import Payment, Refund
 
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderStatusHistory
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -14,6 +14,13 @@ class OrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
+class RefundSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Refund
+        fields = ["amount", "currency", "reason", "status", "gateway_refund_id", "created_at", "updated_at", "processed_at"]
+        read_only_fields = fields
+
+
 class PaymentSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
@@ -21,9 +28,18 @@ class PaymentSummarySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class OrderStatusHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderStatusHistory
+        fields = ["previous_status", "new_status", "note", "created_at"]
+        read_only_fields = fields
+
+
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
+    status_history = OrderStatusHistorySerializer(many=True, read_only=True)
     payment = serializers.SerializerMethodField()
+    refunds = RefundSummarySerializer(many=True, read_only=True)
 
     def get_payment(self, obj):
         payment = getattr(obj, "payment", None)
@@ -34,6 +50,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             "id", "order_number", "email", "full_name", "phone", "address_line1", "address_line2",
             "city", "state", "pincode", "shipping_method", "shipping_amount",
-            "subtotal", "total", "status", "payment_status", "created_at", "updated_at", "items", "payment",
+            "subtotal", "total", "status", "payment_status", "created_at", "updated_at",
+            "items", "payment", "refunds", "status_history",
         ]
         read_only_fields = fields

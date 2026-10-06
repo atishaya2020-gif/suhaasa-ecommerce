@@ -1,65 +1,63 @@
-# SUHAASA — In-App Admin Notifications
+SVAASA — Payment State Regression Fix v2
 
-This patch wires the notification bell in the SUHAASA Store Admin into a persistent, backend-backed notification system.
+Purpose
+-------
+Apply the next payment/lifecycle hardening update on top of the already-applied
+SVAASA Order Lifecycle update.
 
-## Included
-- Persistent `Notification` model with unread/read state.
-- Admin-only notification API.
-- Notification dropdown opened by the bell icon.
-- Unread red dot only when unread notifications exist.
-- Mark individual notification read.
-- Mark all notifications read.
-- Automatic state-based alerts for recent orders, paid orders, low-stock variants and out-of-stock variants.
-- Automatic polling every 30 seconds so new store alerts appear without refreshing.
-- SUHAASA light/dusk styling matching the existing admin dashboard.
+This fixes the regression where a successful Razorpay payment could set the
+Payment record to `captured` and the Order status to `placed`, but leave
+Order.payment_status as `pending`.
 
-## Files to add/replace
-Add:
-```text
-backend/notifications/
-```
-Replace:
-```text
-backend/config/settings.py
-backend/config/urls.py
-backend/templates/admin/base_site.html
-```
+Changes
+-------
+1. `backend/payments/views.py`
+   - Payment verification now explicitly persists `order.payment_status = "paid"`.
+   - Razorpay `payment.captured` / `order.paid` webhook handling now explicitly
+     persists `order.payment_status = "paid"`.
+   - Existing idempotency, inventory reservation consumption, and guest-cart
+     cleanup behavior is preserved.
+   - Late capture after an already-released reservation remains a
+     `reconciliation_required` 409 and does not fulfill the order.
 
-Do NOT replace `db.sqlite3`, `.env`, `media/`, the frontend, or the dashboard template.
+2. `backend/payments/test_payment_capture_regression.py`
+   - Regression coverage for capture webhook -> paid + placed.
+   - Duplicate capture remains idempotent with no second inventory change.
+   - Payment verification -> paid + placed.
+   - Late capture after reservation release -> reconciliation_required, no
+     fulfillment, no second inventory change.
 
-## Apply
-From the existing integrated project:
+Important
+---------
+- Do NOT delete or replace `db.sqlite3`.
+- Do NOT change the V15 storefront.
+- This package is intended to be applied over the current local project after
+  the SVAASA Order Lifecycle update has already been applied.
 
-```powershell
-cd C:\Users\OMEN\Desktop\suhaasa-build-integrated\backend
-.\.venv\Scripts\Activate.ps1
+PowerShell steps
+----------------
+From:
+  C:\Users\OMEN\Desktop\SVASSA\backend
 
-python manage.py check
-python manage.py migrate
-python manage.py test notifications
-python manage.py test
-```
+1. Back up the two target files if desired.
+2. Extract the package contents into the project root so that `backend/...`
+   lands in your project as `backend/...` only if your extraction target is the
+   project root. If you extract directly into the backend directory, copy the
+   files from the package's `backend` folder instead.
 
-Expected notification tests:
-```text
-Found 3 test(s).
-...
-OK
-```
+Recommended safer approach: extract the ZIP somewhere temporary and copy only:
+  backend\payments\views.py
+  backend\payments\test_payment_capture_regression.py
 
-Then restart Django:
-```powershell
-python manage.py runserver
-```
+Then run:
+  .\.venv\Scripts\Activate.ps1
+  python manage.py check
+  python manage.py test payments
+  python manage.py test
 
-## Acceptance test
-1. Open `/admin/`.
-2. The bell icon beside the owner profile is now clickable.
-3. A dropdown should open with current store alerts.
-4. The red dot should appear when unread alerts exist.
-5. Click an alert: it becomes read and opens its relevant admin page.
-6. Click **Mark all as read**: the red dot disappears.
-7. Create a new order or change inventory into a low-stock state. Within the next polling cycle, a new alert should appear.
-8. Refresh the admin page; read state must persist.
+Expected result after applying the fix:
+  - The previous `PaymentStateTransitionTests.test_duplicate_capture_webhook_is_idempotent`
+    regression passes.
+  - Full suite passes with the lifecycle tests plus the new regression tests.
 
-The notification system is intentionally in-app only. No email is added.
+Do not commit/push until the full suite is green.
